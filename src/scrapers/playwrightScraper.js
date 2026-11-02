@@ -5,7 +5,6 @@ const { enrichFromWebsite, normalizeWebsiteUrl } = require('./websiteEnricher');
  * Launch browser using installed Chrome or Edge on desktop, or bundled Chromium on Linux/Docker (Render/Railway)
  */
 async function launchBrowser(headless = true) {
-  // Force headless on Linux servers without an X11 display (e.g. Render, Railway, Docker)
   const effectiveHeadless =
     process.platform === 'linux' && !process.env.DISPLAY ? true : Boolean(headless);
 
@@ -15,10 +14,11 @@ async function launchBrowser(headless = true) {
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
     '--disable-gpu',
+    '--disable-extensions',
+    '--disable-background-networking',
     '--lang=en-US,en'
   ];
 
-  // On Linux containers (Render/Railway/Docker), try bundled Playwright Chromium first
   const isContainer =
     process.platform === 'linux' ||
     Boolean(process.env.RENDER || process.env.RAILWAY_ENVIRONMENT || process.env.DOCKER_CONTAINER);
@@ -73,7 +73,7 @@ function parseCoordinatesFromUrl(url) {
 }
 
 /**
- * Extract place details from a loaded Google Maps place page
+ * Extract place details from a loaded Google Maps place page or side-panel
  */
 async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
   const details = await page.evaluate(() => {
@@ -82,12 +82,15 @@ async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
       return el ? el.textContent.trim() : '';
     };
 
-    const name =
-      getText('h1.DUwDvf') ||
-      getText('h1') ||
-      (document.querySelector('[role="main"]')
-        ? document.querySelector('[role="main"]').getAttribute('aria-label') || ''
-        : '');
+    const allH1s = Array.from(document.querySelectorAll('h1.DUwDvf, h1'));
+    let name = '';
+    for (const h of allH1s) {
+      const t = h.textContent.trim();
+      if (t && t.toLowerCase() !== 'results') {
+        name = t;
+        break;
+      }
+    }
 
     const category = getText('button.DkEaL') || getText('span.DkEaL');
 
@@ -108,7 +111,6 @@ async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
       const digits = aria.replace(/[^\d]/g, '');
       if (digits) reviewsCount = parseInt(digits, 10);
     } else {
-      // Fallback: check parentheses text in F7nice
       const f7 = document.querySelector('div.F7nice');
       if (f7) {
         const match = f7.textContent.match(/\(([\d,]+)\)/);
@@ -200,7 +202,7 @@ async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
   });
 
   const currentUrl = page.url();
-  const coords = parseCoordinatesFromUrl(currentUrl || fallbackItem.mapsUrl);
+  const coords = parseCoordinatesFromUrl(fallbackItem.mapsUrl || currentUrl);
 
   return {
     name: details.name || fallbackItem.name || 'Unknown Business',
@@ -212,7 +214,7 @@ async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
     phone: details.phone || fallbackItem.phone || '',
     website: normalizeWebsiteUrl(details.website || fallbackItem.website || ''),
     plusCode: details.plusCode || '',
-    openingHours: details.openingHours || '',
+    openingHours: details.openingHours || fallbackItem.openingHours || '',
     latitude: coords.latitude,
     longitude: coords.longitude,
     mapsUrl: fallbackItem.mapsUrl || currentUrl
@@ -221,6 +223,8 @@ async function extractPlaceDetailsFromPage(page, fallbackItem = {}) {
 
 /**
  * Scrape Google Maps for a single search query using Playwright
+ * Uses fast in-page SPA card clicking first (avoiding costly full-page reloads & timeouts on cloud CPUs),
+ * with a lightweight 'commit' navigation fallback if needed.
  */
 async function scrapeQueryWithPlaywright({
   query,
@@ -248,10 +252,20 @@ async function scrapeQueryWithPlaywright({
 
     const page = await context.newPage();
 
-    // Block heavy media/fonts to speed up Google Maps navigation
+    // Block heavy images, map vector tiles, streetview photos, media, and fonts so Google Maps runs fast even on 0.1 vCPU
     await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      if (type === 'media' || type === 'font') {
+      const req = route.request();
+      const type = req.resourceType();
+      const url = req.url();
+      if (
+        type === 'image' ||
+        type === 'media' ||
+        type === 'font' ||
+        url.includes('/maps/vt') ||
+        url.includes('streetviewpixels') ||
+        url.includes('googleusercontent.com/p/') ||
+        url.includes('ggpht.com')
+      ) {
         return route.abort();
       }
       return route.continue();
@@ -259,7 +273,14 @@ async function scrapeQueryWithPlaywright({
 
     const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=en`;
     onLog(`Searching Google Maps for: "${query}"...`);
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(searchUrl, { waitUntil: 'commit', timeout: 60000 });
+
+    // Wait for initial DOM elements
+    await Promise.race([
+      page.waitForSelector('div[role="feed"]', { timeout: 25000 }),
+      page.waitForSelector('h1.DUwDvf', { timeout: 25000 }),
+      page.waitForSelector('form[action*="consent"] button', { timeout: 25000 })
+    ]).catch(() => {});
 
     // Dismiss Google consent dialog if shown
     try {
@@ -268,17 +289,14 @@ async function scrapeQueryWithPlaywright({
       );
       if (consentBtn) {
         await consentBtn.click();
-        await page.waitForTimeout(1500);
+        await Promise.race([
+          page.waitForSelector('div[role="feed"]', { timeout: 20000 }),
+          page.waitForSelector('h1.DUwDvf', { timeout: 20000 })
+        ]).catch(() => {});
       }
     } catch {
       // ignore
     }
-
-    // Wait for either the results feed or a direct place page
-    await Promise.race([
-      page.waitForSelector('div[role="feed"]', { timeout: 15000 }),
-      page.waitForSelector('h1.DUwDvf', { timeout: 15000 })
-    ]).catch(() => {});
 
     // Check if Google Maps opened a single direct place instead of a list
     const hasFeed = await page.$('div[role="feed"]');
@@ -286,6 +304,7 @@ async function scrapeQueryWithPlaywright({
       const singleTitle = await page.$('h1.DUwDvf');
       if (singleTitle) {
         onLog(`Found direct business match on Google Maps. Extracting details...`);
+        await page.waitForTimeout(800);
         const leadData = await extractPlaceDetailsFromPage(page, { mapsUrl: page.url() });
         if (enrichWebsites && leadData.website) {
           onLog(`Crawling website for email & socials: ${leadData.website}`);
@@ -317,11 +336,18 @@ async function scrapeQueryWithPlaywright({
           if (!href || seen.has(href)) continue;
           seen.add(href);
 
-          const name = (anchor.getAttribute('aria-label') || '').trim();
           const container = anchor.closest('div.Nv2PK') || anchor.parentElement;
+          const name =
+            (anchor.getAttribute('aria-label') || '').trim() ||
+            (container?.querySelector('.qBF1Pd')?.textContent || '').trim();
+
           let rating = null;
           let reviewsCount = 0;
           let website = '';
+          let phone = '';
+          let category = '';
+          let address = '';
+          let openingHours = '';
 
           if (container) {
             const ratingEl = container.querySelector('span.MW4etd');
@@ -334,9 +360,31 @@ async function scrapeQueryWithPlaywright({
               const digits = revEl.textContent.replace(/[^\d]/g, '');
               if (digits) reviewsCount = parseInt(digits, 10);
             }
-            const webEl = container.querySelector('a[data-value="Website"]');
+            const webEl = container.querySelector('a.lcr4fd, a[data-value="Website"]');
             if (webEl) {
               website = webEl.getAttribute('href') || '';
+            }
+            const phoneEl = container.querySelector('.UsdlK');
+            if (phoneEl) {
+              phone = phoneEl.textContent.trim();
+            }
+
+            // Parse fallback category & address snippet from .W4Efsd lines
+            const w4Lines = Array.from(container.querySelectorAll('.W4Efsd'))
+              .map((el) => el.textContent.trim())
+              .filter(Boolean);
+
+            for (const line of w4Lines) {
+              if (line.includes('·') && !/^\d\.\d/.test(line) && !/open|closes|closed/i.test(line)) {
+                const parts = line
+                  .split('·')
+                  .map((p) => p.replace(/[^\w\s,/-]/g, '').trim())
+                  .filter(Boolean);
+                if (parts.length >= 1 && !category) category = parts[0];
+                if (parts.length >= 2 && !address) address = parts[parts.length - 1];
+              } else if (/open|closes|closed/i.test(line) && !openingHours) {
+                openingHours = line.replace(/\s+/g, ' ').trim();
+              }
             }
           }
 
@@ -345,7 +393,11 @@ async function scrapeQueryWithPlaywright({
             mapsUrl: href,
             rating,
             reviewsCount,
-            website
+            website,
+            phone,
+            category,
+            address,
+            openingHours
           });
         }
         return items;
@@ -369,11 +421,9 @@ async function scrapeQueryWithPlaywright({
         onLog(`Loaded ${collectedItems.length} listings from Google Maps feed...`);
       }
 
-      // Check if reached the end of the list
       const reachedEnd = await page.evaluate(() => {
         const endEl = document.querySelector('span.HlvSq');
-        if (endEl && /end of the list/i.test(endEl.textContent || '')) return true;
-        return false;
+        return Boolean(endEl && /end of the list/i.test(endEl.textContent || ''));
       });
 
       if (reachedEnd) {
@@ -381,93 +431,141 @@ async function scrapeQueryWithPlaywright({
         break;
       }
 
-      // Scroll the feed container
       await page.evaluate(() => {
         const feed = document.querySelector('div[role="feed"]');
-        if (feed) {
-          feed.scrollBy(0, 1600);
-        }
+        if (feed) feed.scrollBy(0, 1600);
       });
 
-      await page.waitForTimeout(1100);
+      await page.waitForTimeout(1000);
     }
 
     const targetItems = collectedItems.slice(0, maxResults);
-    onLog(`Found ${targetItems.length} listings to extract in full detail.`);
+    onLog(`Found ${targetItems.length} listings. Extracting full contact details...`);
 
     const results = [];
 
-    // Use a worker pool of 2 detail pages for fast extraction without triggering rate limits
-    const concurrency = 2;
-    let currentIndex = 0;
+    for (let idx = 0; idx < targetItems.length; idx++) {
+      if (shouldStop()) break;
 
-    const worker = async (workerId) => {
-      const detailPage = await context.newPage();
-      await detailPage.route('**/*', (route) => {
-        const type = route.request().resourceType();
-        if (type === 'image' || type === 'media' || type === 'font') {
-          return route.abort();
-        }
-        return route.continue();
+      const item = targetItems[idx];
+      const coords = parseCoordinatesFromUrl(item.mapsUrl);
+      let leadData = {
+        ...item,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        website: normalizeWebsiteUrl(item.website)
+      };
+
+      onLog(`[${idx + 1}/${targetItems.length}] Extracting details for: ${item.name || 'Listing'}...`);
+      onProgress({
+        stage: 'extracting',
+        current: idx + 1,
+        total: targetItems.length,
+        currentBusiness: item.name
       });
 
+      let extractedFromPanel = false;
+
+      // Extract unique place identifier (!1s0x...) from URL so matching works even if Google mutates query params
+      const placeKeyMatch = (item.mapsUrl || '').match(/!1s([^!]+)/);
+      const placeKey = placeKeyMatch ? placeKeyMatch[1] : '';
+
+      // Strategy 1: Fast In-Page SPA Click (no full page reload, works in ~1s even on 0.1 vCPU)
       try {
-        while (currentIndex < targetItems.length && !shouldStop()) {
-          const idx = currentIndex++;
-          const item = targetItems[idx];
-
-          onLog(`[${idx + 1}/${targetItems.length}] Extracting details for: ${item.name || 'Listing'}...`);
-          onProgress({
-            stage: 'extracting',
-            current: idx + 1,
-            total: targetItems.length,
-            currentBusiness: item.name
-          });
-
-          let leadData = { ...item };
-
-          try {
-            await detailPage.goto(item.mapsUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-            await detailPage.waitForSelector('h1.DUwDvf', { timeout: 8000 }).catch(() => {});
-            // Brief wait for dynamic info buttons (phone/address/website) to render
-            await detailPage.waitForTimeout(650);
-            leadData = await extractPlaceDetailsFromPage(detailPage, item);
-          } catch (navErr) {
-            onLog(`Warning: Partial details for "${item.name}" (${navErr.message})`);
-          }
-
-          if (shouldStop()) break;
-
-          // Website Enrichment for Email ID & Social Links
-          if (enrichWebsites && leadData.website) {
-            onLog(`[${idx + 1}/${targetItems.length}] Scanning website for email & socials: ${leadData.website}`);
-            try {
-              const enriched = await enrichFromWebsite(leadData.website, { timeoutMs: websiteTimeoutMs });
-              leadData.website = enriched.website || leadData.website;
-              leadData.primaryEmail = enriched.primaryEmail || '';
-              leadData.emails = enriched.emails || [];
-              leadData.socials = enriched.socials || {};
-              leadData.whatsapp = enriched.socials?.whatsapp || '';
-              if (leadData.primaryEmail) {
-                onLog(`   ✓ Found email for ${leadData.name}: ${leadData.primaryEmail}`);
-              }
-            } catch (enrichErr) {
-              onLog(`   ! Website scan skipped for ${leadData.name}: ${enrichErr.message}`);
+        const clicked = await page.evaluate(
+          ({ targetHref, targetName, key }) => {
+            const anchors = Array.from(document.querySelectorAll('div[role="feed"] a.hfpxzc'));
+            const target = anchors.find((a) => {
+              const href = a.getAttribute('href') || '';
+              const label = (a.getAttribute('aria-label') || '').trim();
+              if (key && href.includes(key)) return true;
+              if (href === targetHref) return true;
+              if (targetName && label.toLowerCase() === targetName.toLowerCase()) return true;
+              return false;
+            });
+            if (target) {
+              target.scrollIntoView({ block: 'center' });
+              target.click();
+              return true;
             }
+            return false;
+          },
+          { targetHref: item.mapsUrl, targetName: item.name, key: placeKey }
+        );
+
+        if (clicked) {
+          // Wait for the side panel h1.DUwDvf to match the clicked card's name AND contact buttons to hydrate
+          await page
+            .waitForFunction(
+              (expectedName) => {
+                const h1s = Array.from(document.querySelectorAll('h1.DUwDvf'));
+                const nameMatched = h1s.some((h) => {
+                  const txt = h.textContent.trim().toLowerCase();
+                  const exp = (expectedName || '').trim().toLowerCase();
+                  return txt && txt !== 'results' && (txt === exp || txt.includes(exp.slice(0, 10)));
+                });
+                if (!nameMatched) return false;
+                const hasContactNode = Boolean(
+                  document.querySelector('button[data-item-id="address"]') ||
+                    document.querySelector('button[data-item-id^="phone:tel:"]') ||
+                    document.querySelector('a[data-item-id="authority"]')
+                );
+                return hasContactNode;
+              },
+              item.name,
+              { timeout: 8000 }
+            )
+            .catch(() => {});
+
+          await page.waitForTimeout(450);
+          leadData = await extractPlaceDetailsFromPage(page, leadData);
+          if (leadData.phone || leadData.website || (leadData.address && leadData.address.length > 25)) {
+            extractedFromPanel = true;
           }
-
-          results.push(leadData);
-          await onLead(leadData);
         }
-      } finally {
-        await detailPage.close().catch(() => {});
+      } catch {
+        // Fallback below if feed click wasn't available
       }
-    };
 
-    const workers = Array.from({ length: Math.min(concurrency, targetItems.length || 1) }, (_, i) =>
-      worker(i + 1)
-    );
-    await Promise.all(workers);
+      // Strategy 2: Lightweight 'commit' navigation fallback if SPA click didn't hydrate contact nodes
+      if (!extractedFromPanel) {
+        try {
+          await page.goto(item.mapsUrl, { waitUntil: 'commit', timeout: 45000 });
+          await page
+            .waitForSelector('button[data-item-id="address"], button[data-item-id^="phone:tel:"], h1.DUwDvf', {
+              timeout: 12000
+            })
+            .catch(() => {});
+          await page.waitForTimeout(600);
+          leadData = await extractPlaceDetailsFromPage(page, leadData);
+        } catch (navErr) {
+          onLog(`Note: Using feed card details for "${item.name}"`);
+        }
+      }
+
+      if (shouldStop()) break;
+
+      // Website Enrichment for Email ID & Social Links
+      if (enrichWebsites && leadData.website) {
+        onLog(`[${idx + 1}/${targetItems.length}] Scanning website for email & socials: ${leadData.website}`);
+        try {
+          const enriched = await enrichFromWebsite(leadData.website, { timeoutMs: websiteTimeoutMs });
+          leadData.website = enriched.website || leadData.website;
+          leadData.primaryEmail = enriched.primaryEmail || '';
+          leadData.emails = enriched.emails || [];
+          leadData.socials = enriched.socials || {};
+          leadData.whatsapp = enriched.socials?.whatsapp || '';
+          if (leadData.primaryEmail) {
+            onLog(`   ✓ Found email for ${leadData.name}: ${leadData.primaryEmail}`);
+          }
+        } catch (enrichErr) {
+          onLog(`   ! Website scan skipped for ${leadData.name}: ${enrichErr.message}`);
+        }
+      }
+
+      results.push(leadData);
+      await onLead(leadData);
+    }
 
     return results;
   } finally {
