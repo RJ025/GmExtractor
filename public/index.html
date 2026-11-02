@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GmExtractor — Google Maps Lead Extractor & Outreach Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Top Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">GM</div>
+      <div class="brand-text">
+        <h1>GmExtractor Pro</h1>
+        <p>Google Maps Business Extractor, Email Crawler &amp; Outreach CRM</p>
+      </div>
+    </div>
+
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="extract">
+        <span>⚡ Extract Leads</span>
+      </button>
+      <button class="nav-tab" data-tab="leads">
+        <span>📋 Leads CRM &amp; Filter</span>
+        <span class="nav-badge" id="nav-leads-count">0</span>
+      </button>
+      <button class="nav-tab" data-tab="campaigns">
+        <span>🗂️ Saved Searches</span>
+        <span class="nav-badge" id="nav-campaigns-count">0</span>
+      </button>
+      <button class="nav-tab" data-tab="settings">
+        <span>⚙️ Settings &amp; API</span>
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <button class="btn btn-emerald" id="btn-export-all-excel" title="Download all leads as a formatted Excel (.xlsx) workbook">
+        📊 Export All to Excel (.xlsx)
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-container">
+    <!-- Global KPI Strip -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-label">Total Leads Extracted</span>
+        <div class="kpi-value" id="kpi-total">0</div>
+        <span class="kpi-sub" id="kpi-campaigns-sub">Across 0 search campaigns</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">With Phone Number</span>
+        <div class="kpi-value" id="kpi-phone" style="color: #38bdf8;">0</div>
+        <span class="kpi-sub" id="kpi-phone-pct">Ready for calls / WhatsApp</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">With Email ID</span>
+        <div class="kpi-value" id="kpi-email" style="color: #34d399;">0</div>
+        <span class="kpi-sub" id="kpi-email-pct">Crawled from business websites</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">With Website</span>
+        <div class="kpi-value" id="kpi-website" style="color: #a5b4fc;">0</div>
+        <span class="kpi-sub" id="kpi-website-pct">Active web domains</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">No Website (Pitch Target)</span>
+        <div class="kpi-value" id="kpi-nowebsite" style="color: #fbbf24;">0</div>
+        <span class="kpi-sub">Ideal for web/marketing pitch</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">With Social Media</span>
+        <div class="kpi-value" id="kpi-socials" style="color: #f472b6;">0</div>
+        <span class="kpi-sub">Instagram, Facebook, LinkedIn</span>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 1: EXTRACT LEADS -->
+    <!-- ================================================================== -->
+    <section class="view-section active" id="view-extract">
+      <div class="extractor-layout">
+        <!-- Left Config Panel -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">🔍 New Google Maps Extraction</div>
+              <div class="panel-subtitle">Search any business category &amp; location (single or bulk batch)</div>
+            </div>
+          </div>
+
+          <form id="extraction-form">
+            <div class="form-group">
+              <label class="form-label" for="input-queries">
+                <span>Search Queries (1 per line for Bulk Search)</span>
+                <button type="button" class="chip-btn" id="btn-open-expander" title="Split a broad city search into neighborhoods to get 5x more leads">
+                  ✨ Expand Sub-Areas
+                </button>
+              </label>
+              <textarea
+                id="input-queries"
+                class="form-textarea"
+                rows="4"
+                placeholder="cafes in South Delhi&#10;or enter multiple queries (one per line):&#10;cafes in Hauz Khas, South Delhi&#10;cafes in Saket, South Delhi"
+                required
+              >cafes in South Delhi</textarea>
+              <div class="preset-chips">
+                <button type="button" class="chip-btn preset-query" data-queries="cafes in South Delhi">
+                  ☕ Cafes in South Delhi
+                </button>
+                <button
+                  type="button"
+                  class="chip-btn preset-query"
+                  data-queries="cafes in Hauz Khas, South Delhi&#10;cafes in Greater Kailash, South Delhi&#10;cafes in Saket, South Delhi&#10;cafes in Defence Colony, South Delhi&#10;cafes in Green Park, South Delhi&#10;cafes in Vasant Kunj, South Delhi&#10;cafes in Malviya Nagar, South Delhi&#10;cafes in Lajpat Nagar, South Delhi"
+                >
+                  🚀 South Delhi Cafes (8 Neighborhoods Batch)
+                </button>
+                <button type="button" class="chip-btn preset-query" data-queries="specialty coffee shops in New Delhi">
+                  🫘 Specialty Coffee Delhi
+                </button>
+                <button type="button" class="chip-btn preset-query" data-queries="bakeries and patisseries in South Delhi">
+                  🥐 Bakeries South Delhi
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-campaign-name">
+                <span>Campaign / Sheet Name <small style="color: var(--text-muted); font-weight: 400;">(Optional)</small></span>
+              </label>
+              <input
+                type="text"
+                id="input-campaign-name"
+                class="form-input"
+                placeholder="e.g., South Delhi Cafes Outreach - Nov"
+              />
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="select-mode">Extraction Engine</label>
+                <select id="select-mode" class="form-select">
+                  <option value="playwright">Playwright Scraper (Free / No Key)</option>
+                  <option value="places_api">Google Places API (API Key)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="select-max-results">Max Leads / Query</label>
+                <select id="select-max-results" class="form-select">
+                  <option value="10">Up to 10 leads (Fast test)</option>
+                  <option value="25" selected>Up to 25 leads</option>
+                  <option value="50">Up to 50 leads</option>
+                  <option value="80">Up to 80 leads</option>
+                  <option value="120">Up to 120 leads (Max Feed)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-enrich-websites" checked />
+                <span>
+                  <strong>Auto-Crawl Business Websites for Email IDs &amp; Socials</strong>
+                  <small>Visits each business's website &amp; /contact page to extract email addresses, Instagram, Facebook, LinkedIn &amp; WhatsApp</small>
+                </span>
+              </label>
+
+              <label class="checkbox-label" id="headless-toggle-wrap">
+                <input type="checkbox" id="chk-headless" checked />
+                <span>
+                  <strong>Run Browser in Background (Headless Mode)</strong>
+                  <small>Uncheck if you want to watch the automated Chrome browser scroll Google Maps live</small>
+                </span>
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="btn-start-extract">
+              🚀 Start Extracting Google Maps Data
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Live Console & Preview Panel -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">
+                <span>📡 Live Extraction Feed &amp; Results Preview</span>
+                <span class="status-pill completed" id="live-status-badge" style="display: none;">Idle</span>
+              </div>
+              <div class="panel-subtitle" id="live-subtitle">
+                Start an extraction on the left to watch businesses, phone numbers, and emails stream in real time.
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="btn btn-danger btn-sm" id="btn-stop-job" style="display: none;">
+                ⏹ Stop &amp; Save
+              </button>
+              <button class="btn btn-emerald btn-sm" id="btn-download-live-excel" disabled>
+                📥 Download Excel (.xlsx)
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-view-in-crm" disabled>
+                🔎 Open in CRM
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="progress-box" id="live-progress-box">
+            <div class="progress-top">
+              <span id="live-progress-text" style="font-weight: 600;">Ready to extract</span>
+              <span id="live-progress-pct" style="color: #a5b4fc; font-weight: 700;">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="live-progress-bar"></div>
+            </div>
+            <div style="display: flex; gap: 1.25rem; margin-top: 0.7rem; font-size: 0.78rem; color: var(--text-secondary); flex-wrap: wrap;">
+              <span>Extracted: <strong id="live-stat-total" style="color: #fff;">0</strong></span>
+              <span>With Phone: <strong id="live-stat-phone" style="color: #38bdf8;">0</strong></span>
+              <span>With Email: <strong id="live-stat-email" style="color: #34d399;">0</strong></span>
+              <span>With Website: <strong id="live-stat-web" style="color: #a5b4fc;">0</strong></span>
+              <span>With Socials: <strong id="live-stat-socials" style="color: #f472b6;">0</strong></span>
+            </div>
+          </div>
+
+          <!-- Terminal Log -->
+          <div class="live-log-terminal" id="live-log-terminal">
+            <div class="log-line">
+              <span class="log-time">[System]</span> Ready. Enter a search query (e.g., "cafes in South Delhi") and click Start Extracting.
+            </div>
+          </div>
+
+          <!-- Live Table -->
+          <div class="table-wrapper" style="max-height: 520px; overflow-y: auto;">
+            <table class="leads-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Business Name &amp; Category</th>
+                  <th>Phone Number</th>
+                  <th>Email ID (Website Crawl)</th>
+                  <th>Website &amp; Socials</th>
+                  <th>Address</th>
+                  <th>Rating</th>
+                </tr>
+              </thead>
+              <tbody id="live-leads-tbody">
+                <tr>
+                  <td colspan="7" class="empty-state">
+                    No leads in current session yet. Run a search on the left to populate this table live!
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 2: LEADS CRM & FILTER EXPLORER -->
+    <!-- ================================================================== -->
+    <section class="view-section" id="view-leads">
+      <div class="panel-card">
+        <div class="panel-header" style="flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <div class="panel-title">📋 Extracted Leads Directory &amp; Outreach CRM</div>
+            <div class="panel-subtitle">
+              Filter leads by email, phone, website, rating, or outreach status and export directly to Excel (.xlsx) or CSV
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.55rem; flex-wrap: wrap;">
+            <button class="btn btn-emerald" id="btn-export-filtered-excel">
+              📊 Export Filtered to Excel (.xlsx)
+            </button>
+            <button class="btn btn-secondary" id="btn-export-filtered-csv">
+              📄 Export CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Toolbar -->
+        <div class="filter-toolbar">
+          <input
+            type="text"
+            id="crm-search"
+            class="form-input filter-search"
+            placeholder="Search by business name, email, phone, address, category, or notes..."
+          />
+
+          <select id="crm-campaign-filter" class="form-select" style="width: auto; min-width: 200px;">
+            <option value="all">All Search Campaigns</option>
+          </select>
+
+          <select id="crm-rating-filter" class="form-select" style="width: auto;">
+            <option value="0">Any Rating</option>
+            <option value="3.5">3.5+ ★ Rating</option>
+            <option value="4.0">4.0+ ★ Rating</option>
+            <option value="4.5">4.5+ ★ Rating</option>
+          </select>
+
+          <select id="crm-status-filter" class="form-select" style="width: auto;">
+            <option value="all">All Outreach Statuses</option>
+            <option value="New">🆕 New</option>
+            <option value="Contacted">📩 Contacted</option>
+            <option value="Interested">🔥 Interested</option>
+            <option value="Follow-Up">⏰ Follow-Up</option>
+            <option value="Meeting Booked">📅 Meeting Booked</option>
+            <option value="Closed">✅ Closed Won</option>
+            <option value="Not Interested">❌ Not Interested</option>
+          </select>
+
+          <select id="crm-sort" class="form-select" style="width: auto;">
+            <option value="extractedAt:desc">Newest Extracted</option>
+            <option value="rating:desc">Highest Rating</option>
+            <option value="reviewsCount:desc">Most Reviews</option>
+            <option value="name:asc">Name (A-Z)</option>
+          </select>
+        </div>
+
+        <!-- Quick Filter Pills & Bulk Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="filter-pills">
+            <button type="button" class="filter-pill" data-filter="hasEmail">📧 Has Email ID</button>
+            <button type="button" class="filter-pill" data-filter="hasPhone">📞 Has Phone</button>
+            <button type="button" class="filter-pill" data-filter="hasWebsite">🌐 Has Website</button>
+            <button type="button" class="filter-pill" data-filter="noWebsite">🎯 No Website (Pitch Target)</button>
+            <button type="button" class="filter-pill" data-filter="hasSocials">📱 Has Social Links</button>
+            <button type="button" class="filter-pill" data-filter="starred">⭐ Starred</button>
+            <button type="button" class="filter-pill" data-filter="deduplicate">✨ Hide Duplicates</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-filters">Reset Filters</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem;" id="bulk-actions-bar">
+            <span style="font-size: 0.8rem; color: var(--text-secondary);" id="crm-showing-count">Showing 0 leads</span>
+            <select id="bulk-status-select" class="status-select" style="display: none;">
+              <option value="">Bulk Set Status...</option>
+              <option value="New">Set: New</option>
+              <option value="Contacted">Set: Contacted</option>
+              <option value="Interested">Set: Interested</option>
+              <option value="Follow-Up">Set: Follow-Up</option>
+              <option value="Meeting Booked">Set: Meeting Booked</option>
+              <option value="Closed">Set: Closed</option>
+              <option value="Not Interested">Set: Not Interested</option>
+            </select>
+            <button class="btn btn-emerald btn-sm" id="btn-export-selected" style="display: none;">
+              📥 Export Selected (<span id="selected-count">0</span>)
+            </button>
+            <button class="btn btn-danger btn-sm" id="btn-delete-selected" style="display: none;">
+              🗑 Delete Selected
+            </button>
+          </div>
+        </div>
+
+        <!-- Main CRM Table -->
+        <div class="table-wrapper">
+          <table class="leads-table">
+            <thead>
+              <tr>
+                <th style="width: 36px;"><input type="checkbox" id="chk-select-all" /></th>
+                <th style="width: 36px;">★</th>
+                <th>Business Name &amp; Category</th>
+                <th>Phone &amp; WhatsApp</th>
+                <th>Email ID</th>
+                <th>Website &amp; Socials</th>
+                <th>Address &amp; Query</th>
+                <th>Rating &amp; Reviews</th>
+                <th>Outreach Status</th>
+                <th>Actions / Notes</th>
+              </tr>
+            </thead>
+            <tbody id="crm-leads-tbody">
+              <tr>
+                <td colspan="10" class="empty-state">No leads found matching your filters.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 3: SAVED SEARCHES / CAMPAIGNS -->
+    <!-- ================================================================== -->
+    <section class="view-section" id="view-campaigns">
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">🗂️ Saved Search Campaigns &amp; Extraction History</div>
+            <div class="panel-subtitle">Download past Excel sheets, filter by campaign, or re-run any search</div>
+          </div>
+        </div>
+        <div class="campaigns-grid" id="campaigns-container"></div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 4: SETTINGS & API KEY -->
+    <!-- ================================================================== -->
+    <section class="view-section" id="view-settings">
+      <div class="panel-card" style="max-width: 760px; margin: 0 auto;">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">⚙️ Extractor Settings &amp; Google Places API Configuration</div>
+            <div class="panel-subtitle">
+              Configure your default scraper behavior or add an optional Google Cloud Places API Key
+            </div>
+          </div>
+        </div>
+
+        <form id="settings-form">
+          <div class="form-group">
+            <label class="form-label" for="settings-api-key">
+              <span>Google Places API Key (Optional — only needed for API Mode)</span>
+            </label>
+            <div style="display: flex; gap: 0.6rem;">
+              <input
+                type="password"
+                id="settings-api-key"
+                class="form-input"
+                placeholder="AIzaSy..."
+              />
+              <button type="button" class="btn btn-secondary" id="btn-test-api-key">
+                🔌 Test Key
+              </button>
+            </div>
+            <div class="form-hint" id="api-key-test-result">
+              Playwright Browser Scraper works out-of-the-box for free without any API key. If you prefer using Google's official Places API, paste your key above.
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label" for="settings-default-mode">Default Extraction Mode</label>
+              <select id="settings-default-mode" class="form-select">
+                <option value="playwright">Playwright Browser Scraper (Free)</option>
+                <option value="places_api">Google Places Official API</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="settings-default-max">Default Max Leads per Query</label>
+              <input type="number" id="settings-default-max" class="form-input" min="5" max="200" value="30" />
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label" for="settings-timeout">Website Crawl Timeout (ms)</label>
+              <input type="number" id="settings-timeout" class="form-input" min="3000" max="30000" value="9000" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="settings-headless">Default Browser Visibility</label>
+              <select id="settings-headless" class="form-select">
+                <option value="true">Headless (Run in background)</option>
+                <option value="false">Visible Browser Window</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">💾 Save Settings</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 1: SMART SUB-AREA EXPANDER -->
+  <!-- ==================================================================== -->
+  <div class="modal-backdrop" id="modal-expander">
+    <div class="modal-card">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">✨ Smart Neighborhood / Sub-Area Expander</div>
+          <div class="panel-subtitle">
+            Google Maps caps a single search at ~120 results. Split a region into neighborhoods to extract every single business!
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-expander">✕</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Business Category / Keyword</label>
+        <input type="text" id="exp-keyword" class="form-input" value="cafes" placeholder="e.g., cafes, gyms, dental clinics, salons" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">City / Main Region</label>
+        <input type="text" id="exp-region" class="form-input" value="South Delhi" placeholder="e.g., South Delhi" />
+        <div class="preset-chips">
+          <button type="button" class="chip-btn exp-preset" data-region="South Delhi" data-areas="Hauz Khas, Greater Kailash 1, Greater Kailash 2, Saket, Defence Colony, Green Park, Vasant Kunj, Malviya Nagar, Lajpat Nagar, Kalkaji, New Friends Colony, Shahpur Jat, Chhatarpur, Mehrauli">
+            📍 Load 14 South Delhi Neighborhoods
+          </button>
+          <button type="button" class="chip-btn exp-preset" data-region="New Delhi" data-areas="Connaught Place, Khan Market, Karol Bagh, Rajouri Garden, Punjabi Bagh, Pitampura, Dwarka, Rohini, Janakpuri, Laxmi Nagar">
+            📍 Load 10 Delhi Hubs
+          </button>
+          <button type="button" class="chip-btn exp-preset" data-region="Gurugram" data-areas="Cyber Hub, Sector 29, Golf Course Road, Sohna Road, MG Road, Galleria Market, Udyog Vihar, Nirvana Country">
+            📍 Load 8 Gurugram Hubs
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Sub-Areas / Neighborhoods (Comma-separated)</label>
+        <textarea id="exp-areas" class="form-textarea" rows="3">Hauz Khas, Greater Kailash, Saket, Defence Colony, Green Park, Vasant Kunj, Malviya Nagar, Lajpat Nagar, Kalkaji, New Friends Colony</textarea>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.6rem;">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-expander">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-apply-expander">Apply Queries to Extractor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL 2: EDIT LEAD & OUTREACH NOTES -->
+  <!-- ==================================================================== -->
+  <div class="modal-backdrop" id="modal-lead-edit">
+    <div class="modal-card">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title" id="edit-lead-title">Edit Lead &amp; Marketing Notes</div>
+          <div class="panel-subtitle">Update contact info or log your sales outreach notes</div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-lead-modal">✕</button>
+      </div>
+
+      <form id="form-lead-edit">
+        <input type="hidden" id="edit-lead-id" />
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">Primary Email ID</label>
+            <input type="text" id="edit-lead-email" class="form-input" placeholder="contact@business.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="text" id="edit-lead-phone" class="form-input" placeholder="+91 ..." />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">Website URL</label>
+            <input type="text" id="edit-lead-website" class="form-input" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Outreach Status</label>
+            <select id="edit-lead-status" class="form-select">
+              <option value="New">🆕 New</option>
+              <option value="Contacted">📩 Contacted</option>
+              <option value="Interested">🔥 Interested</option>
+              <option value="Follow-Up">⏰ Follow-Up</option>
+              <option value="Meeting Booked">📅 Meeting Booked</option>
+              <option value="Closed">✅ Closed Won</option>
+              <option value="Not Interested">❌ Not Interested</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Marketing / Sales Outreach Notes</label>
+          <textarea
+            id="edit-lead-notes"
+            class="form-textarea"
+            rows="4"
+            placeholder="e.g., Spoke with manager Rahul, send cafe marketing deck on WhatsApp & email by Thursday..."
+          ></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.6rem;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-lead-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

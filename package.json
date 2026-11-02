@@ -1,0 +1,17 @@
+{
+  "name": "gm-extractor",
+  "version": "1.0.0",
+  "description": "Google Maps Business Lead Extractor, Website Email Scraper & Outreach CRM with Excel Export",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "playwright": "^1.50.0"
+  }
+}
