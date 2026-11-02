@@ -1,5 +1,7 @@
 # GmExtractor Pro — Google Maps Lead Extractor & Outreach Suite
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/RJ025/GmExtractor)
+
 A full-stack web application that extracts business leads from **Google Maps** (e.g., *"cafes in South Delhi"*), crawls each business's website for **email IDs and social media links** (Instagram, Facebook, LinkedIn, WhatsApp), manages outreach status in a built-in CRM, and exports everything into a multi-sheet **Excel (`.xlsx`)** or **CSV** file.
 
 ---

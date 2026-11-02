@@ -14,8 +14,12 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================================
-// Dashboard & Global Stats
+// Health Check & Dashboard Global Stats
 // ============================================================================
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 app.get('/api/stats', (req, res) => {
   res.json(storage.getGlobalStats());
 });
@@ -106,6 +110,7 @@ app.get('/api/jobs/:id/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
 
   const sendEvent = (event, data) => {
@@ -353,7 +358,7 @@ app.post('/api/settings/test-api-key', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n=============================================================`);
   console.log(`  GmExtractor — Google Maps Lead & Outreach Suite`);
   console.log(`  Server running at: http://localhost:${PORT}`);

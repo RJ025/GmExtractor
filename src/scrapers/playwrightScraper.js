@@ -2,24 +2,37 @@ const { chromium } = require('playwright');
 const { enrichFromWebsite, normalizeWebsiteUrl } = require('./websiteEnricher');
 
 /**
- * Launch browser using installed Chrome or Edge first, with fallback to default Chromium
+ * Launch browser using installed Chrome or Edge on desktop, or bundled Chromium on Linux/Docker (Render/Railway)
  */
 async function launchBrowser(headless = true) {
+  // Force headless on Linux servers without an X11 display (e.g. Render, Railway, Docker)
+  const effectiveHeadless =
+    process.platform === 'linux' && !process.env.DISPLAY ? true : Boolean(headless);
+
   const launchArgs = [
     '--disable-blink-features=AutomationControlled',
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
+    '--disable-gpu',
     '--lang=en-US,en'
   ];
 
-  const channelsToTry = ['chrome', 'msedge', undefined];
+  // On Linux containers (Render/Railway/Docker), try bundled Playwright Chromium first
+  const isContainer =
+    process.platform === 'linux' ||
+    Boolean(process.env.RENDER || process.env.RAILWAY_ENVIRONMENT || process.env.DOCKER_CONTAINER);
+
+  const channelsToTry = isContainer
+    ? [undefined, 'chrome', 'msedge']
+    : ['chrome', 'msedge', undefined];
+
   let lastErr = null;
 
   for (const channel of channelsToTry) {
     try {
       const options = {
-        headless: Boolean(headless),
+        headless: effectiveHeadless,
         args: launchArgs
       };
       if (channel) options.channel = channel;
@@ -29,7 +42,7 @@ async function launchBrowser(headless = true) {
     }
   }
   throw new Error(
-    `Failed to launch browser (tried Chrome, Edge, Chromium): ${lastErr ? lastErr.message : 'Unknown error'}`
+    `Failed to launch browser: ${lastErr ? lastErr.message : 'Unknown error'}`
   );
 }
 

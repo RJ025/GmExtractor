@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: gm-extractor
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DOCKER_CONTAINER
+        value: "true"
